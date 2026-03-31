@@ -1,0 +1,12 @@
+Voilà les 5 fichiers. Voici un résumé de ce qui a changé et pourquoi :
+engine.py — c'est la classe Value de micrograd avec une méthode sigmoid() ajoutée. Elle gère le graphe de calcul automatique, donc tu n'as plus besoin d'écrire back_propagation() à la main.
+nn.py — les classes Neuron, Layer, MLP. La config que tu voulais est intégrée : couches cachées en ReLU, couche de sortie en sigmoïde. Chaque Neuron sait calculer son propre gradient via engine.py.
+fonction_RL.py — les changements clés :
+
+initialisation(), forward_propagation(), back_propagation(), update() supprimés → remplacés par creer_agent() qui retourne un MLP
+TD_lambda() conservé mais adapté : il appelle v0.backward() (micrograd) au lieu de faire la backprop numpy manuellement
+choix() retourne maintenant un tuple (float, Value) — le float pour comparer les actions, le Value pour pouvoir appeler .backward() dans TD-Lambda
+recuperer_etat_au_temps_t() retourne un np.array 1-D propre de taille 48
+
+main.py — correction principale : les blocs TD-Lambda et l'enregistrement des trajectoires sont maintenant dans la boucle for t_step, au bon niveau d'indentation. La logique epsilon-greedy est conservée.
+document.py — correction principale : la détection des contacts est maintenant dans une boucle séparée (Phase 1) avant la boucle des équations du mouvement (Phase 2), ce qui évitait que C soit incomplet quand on l'utilisait.
