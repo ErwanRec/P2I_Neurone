@@ -58,7 +58,7 @@ def choisir_meilleure_action(env, S: np.ndarray, net: MLP, equipe: int):
 # ------------------------------------------------------------------ #
 def match(net1: MLP, net2: MLP, traces1: dict, traces2: dict):
     env = dc.Match(PARAMS_MATCH)
-    env.balle.porteur = 0 # Le joueur 0 commence avec la balle
+    env.donner_balle_a(0) # Le joueur 0 commence avec la balle
     
     nb = int(len(env.joueurs) / 2)
     zero = [0, 0, [0, 0, 0]]
@@ -74,6 +74,16 @@ def match(net1: MLP, net2: MLP, traces1: dict, traces2: dict):
         t_step = env.t
         S = RL.recuperer_etat_au_temps_t(env, t_step)
 
+        pid = env.balle.porteur
+        traj_balle["porteur"].append(pid)
+        if pid != -1:
+            traj_balle["x"].append(env.joueurs[pid].pos_x[t_step])
+            traj_balle["y"].append(env.joueurs[pid].pos_y[t_step])
+        else:
+            env.balle.vol_libre(t_step, dc.g)
+            traj_balle["x"].append(env.balle.x[t_step])
+            traj_balle["y"].append(env.balle.y[t_step])
+        
         # --- Choix actions ---
         if np.random.rand() < epsilon:
             action1 = RL.actions(env, 1)[np.random.randint(len(RL.actions(env, 1)))]
@@ -111,17 +121,11 @@ def match(net1: MLP, net2: MLP, traces1: dict, traces2: dict):
         traj2["x"].append(env.joueurs[nb+i].pos_x[:end_t])
         traj2["y"].append(env.joueurs[nb+i].pos_y[:end_t])
 
-    pid = env.balle.porteur
-    if pid != -1:
-        bx = env.joueurs[pid].pos_x[env.t]
-        by = env.joueurs[pid].pos_y[env.t]
-    else:
-        bx = env.balle.x[env.t]
-        by = env.balle.y[env.t]
+    # voir si utile
 
-    traj_balle["x"].append(bx)
-    traj_balle["y"].append(by)
-    traj_balle["porteur"].append(pid)
+    # traj_balle["x"].append(bx)
+    # traj_balle["y"].append(by)
+    # traj_balle["porteur"].append(pid)
     
     dist_finale = traj1["x"][0][-1] # Distance du J0
     return traj1, traj2, traj_balle, dist_finale

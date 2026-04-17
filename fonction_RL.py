@@ -55,12 +55,22 @@ def calculer_recompense(env, final: bool) -> float:
     """Récompense basée sur la progression vers la ligne d'essai."""
     pos_x = env.balle.x[env.t]
     cible = env.longeur
+    porteur = env.balle.porteur
+    
     if final:
-        # Bonus si un essai est marqué (le porteur est derrière la ligne)
-        if env.balle.porteur != -1 and env.joueurs[env.balle.porteur].pos_x[env.t] >= cible:
-            return 10.0
-        return 0.0 # Si ça finit en touche ou fin du temps sans essai
-    return (pos_x / cible) * 0.1
+        # Bonus Essai (seulement si porté)
+        if porteur != -1 and env.joueurs[porteur].pos_x[env.t] >= cible:
+            return 20.0 # Augmente le bonus pour qu'il soit très clair
+        return -5.0 # Malus si le match finit sans essai (touche/temps)
+
+    # Récompense de progression
+    recompense = (pos_x / cible) * 0.1
+    
+    # GROS BONUS si le joueur garde la balle en main (incite à ne pas la perdre)
+    if porteur != -1:
+        recompense += 0.05
+        
+    return recompense
 
 # ------------------------------------------------------------------ #
 #  État (Adapté à l'Orienté Objet)                                     #
@@ -104,3 +114,4 @@ def actions(env, equipe: int, tout: bool = False) -> list:
         return dc.action_avec_balle_1 if equipe_porteur == 1 else dc.action_avec_balle_2
     else:
         return dc.action_avec_balle_1 if equipe_porteur == 2 else dc.action_avec_balle_2
+    

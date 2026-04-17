@@ -184,14 +184,28 @@ class Balle:
         # Conversion des angles en radians si nécessaire
         theta_rad = np.radians(theta)
         phi_rad = np.radians(phi)
-        F       = float(F)
+        F = float(F)
         
-        self.x[t] = (F/mb * np.cos(theta_rad) * np.cos(phi_rad) + joueur_balle.vit_x[t]) + joueur_balle.pos_x[t-1]
-        self.y[t] = (F/mb * np.sin(theta_rad) * np.cos(phi_rad) + joueur_balle.vit_y[t]) + joueur_balle.pos_y[t-1]
-        self.z[t] = -(1/2)*g + (F/mb) * np.sin(phi_rad) + self.z[t-1]
-        self.vx[t] = (F/mb * np.cos(theta_rad) * np.cos(phi_rad) + joueur_balle.vit_x[t])
-        self.vy[t] = (F/mb * np.sin(theta_rad) * np.cos(phi_rad) + joueur_balle.vit_y[t])
-
+        # Position de départ (les mains du joueur)
+        self.x[t] = joueur_balle.pos_x[t]
+        self.y[t] = joueur_balle.pos_y[t]
+        self.z[t] = 1.0 
+        
+        # Vitesse initiale propulsée
+        self.vx[t] = (F/mb * np.cos(theta_rad) * np.cos(phi_rad)) + joueur_balle.vit_x[t]
+        self.vy[t] = (F/mb * np.sin(theta_rad) * np.cos(phi_rad)) + joueur_balle.vit_y[t]
+    
+    def vol_libre(self, t, g):
+        """Fait continuer la trajectoire de la balle quand elle n'a plus de porteur."""
+        # Elle continue sur sa vitesse (Inertie)
+        self.x[t] = self.x[t-1] + self.vx[t-1]
+        self.y[t] = self.y[t-1] + self.vy[t-1]
+        self.z[t] = max(0, self.z[t-1] - (0.5 * g)) # Elle tombe, mais s'arrête au sol (z=0)
+        
+        # Frottement de l'air/sol
+        self.vx[t] = self.vx[t-1] * 0.95
+        self.vy[t] = self.vy[t-1] * 0.95
+        
     def suivre_joueur(self, joueur, t):
         """Si un joueur porte la balle, elle prend ses coordonnées."""
         self.x[t] = joueur.pos_x[t]
@@ -200,81 +214,6 @@ class Balle:
         self.vx[t] = joueur.vit_x[t]
         self.vy[t] = joueur.vit_y[t]
         
-class Joueurmoi:
-    def __init__(self, id_joueur, equipe, masse, rayon, x0, y0):
-        self.id = id_joueur
-        self.equipe = equipe
-        self.m = masse
-        self.r = rayon
-        
-        # Vecteurs d'état (historique)
-        self.pos_x = np.zeros(dc.T)
-        self.pos_y = np.zeros(dc.T)
-        self.vit_x = np.zeros(dc.T)
-        self.vit_y = np.zeros(dc.T)
-        self.acc_x = np.zeros(dc.T)
-        self.acc_y = np.zeros(dc.T)
-        
-        # Initialisation
-        self.pos_x[0], self.pos_y[0] = x0, y0
-        
-        # États
-        self.fatigue = 0
-        self.immobilise_timer = 0 
-        self.dans_ruck = False  
-        
-    def get_pos(self, t):
-        return self.pos_x[t], self.pos_y[t]
-    
-    def touche(self,t):
-        return (self.pos_x[t-1] < 0 or self.pos_x[t-1] > 10 or self.pos_y[t-1] < 0 or self.pos_y[t-1] > 7)
-
-    def limite_terrain(self,t):
-        if -4 > self.pos_x[t] or self.pos_x[t] > terrain.longeur + 4 or 0 > self.pos_y[t] or self.pos_y[t]> terrain.longeur:
-            return 1
-        else:
-            return 0
-    
-    def zone_essai(self,t,n, terrain):
-        if self.id < n/2:
-            E = 0
-        else:
-            E = 1
-        if E:
-            if self.pos_x[t] < 0:
-                return 1
-            else:
-                return 0
-        else:
-            if self.pos_x[t] > terrain.longeur:
-                return 1
-            else:
-                return 0
-    
-    def interception_balle(self,h,vx,vy,hj,xj1,xj2,E): # E est soit 1 ou 2 pour savoir quel équipe a la balle
-        if h > hj :
-            self.fatigue += 1
-            return (vx,vy,0,0)
-        elif xj1 < xj2 and E == 1 :
-            self.fatigue += 1
-            return (vx,vy,1,1)
-        elif xj1 > xj2 and E == 2 :
-            self.fatigue += 1
-            return (vx,vy,1,1)
-        elif vx == 0 and vy == 0:
-            self.fatigue += 1
-            return (vx,vy,0,1)
-        elif 1 < h :
-            (B,P) = decision_avec_probabilite(0.40,J)
-            self.fatigue += 1
-            return (vx,vy,not B, B)
-        else :
-            (B,P) = decision_avec_probabilite(0.80,J)
-            vpx = (1-P)*vx
-            vpy = (1-P)*vy
-            self.fatigue += 1
-            return (vpx,vpy,not B, B) # vitesse du joueur , fautes , rattrape la balle
-
 class Joueur:
     def __init__(self, id_joueur, equipe, masse, rayon, x0, y0, T_max):
         self.id = id_joueur
@@ -339,45 +278,6 @@ class Terrain:
         self.t = 0
         # Réinitialiser positions des joueurs et balle...  a faire 
         
-# class Matchmoi:
-#     def __init__(self):
-#         self.t = 0
-#         self.joueurs = [] # Liste d'objets Joueur
-#         self.balle = Balle()
-#         self.ruck_coor = [-1, -1]
-#         self.timer_ruck = 0
-#         self.score_equipe1 = 0
-#         self.score_equipe2 = 0
-
-#     def est_en_touche(self, joueur):
-#         # Utilise les propriétés de l'objet joueur
-#         return joueur.pos_x[self.t] < 0 or ...
-
-#     def resoudre_mouvement(self, joueur, action):
-#         # On déplace la logique de calcul exponentiel (A * np.exp...) ici
-#         pass
-    
-#     def relance_match() : # (Peut être le __init__ ou une méthode de reset).
-#         return
-    
-#     def action_match() : # C'est le coeur du moteur de jeu. ( fonction update )
-#         return
-    
-#     def contact(J1, J2, t) : # Car elle compare deux entités.
-#         return
-    
-#     def plaquage( ) : # Gère l'interaction physique entre deux joueurs.
-#         return
-    
-#     def ruck(L1, L2, t) : # Gère le combat collectif.
-#         return
-    
-#     def etat_final() :  # Détermine si le match est fini.
-#         return
-    
-#     def copi_terrain() : # Pour les simulations de l'IA.
-#         return
-
 class Match:
     def __init__(self, params):
         self.T_max = params['T']
@@ -410,7 +310,15 @@ class Match:
         self.balle.x[0] = self.joueurs[0].pos_x[0]
         self.balle.y[0] = self.joueurs[0].pos_y[0]
         self.balle.z[0] = 1.0
-        
+    
+    def donner_balle_a(self, id_joueur):
+        """Méthode propre pour forcer la balle dans les mains d'un joueur."""
+        self.balle.porteur = id_joueur
+        joueur = self.joueurs[id_joueur]
+        self.balle.x[self.t] = joueur.pos_x[self.t]
+        self.balle.y[self.t] = joueur.pos_y[self.t]
+        self.balle.z[self.t] = 1.0
+          
     def reset(self):
         """Relance le match (remplace relance_match)."""
         self.__init__({
@@ -457,7 +365,7 @@ class Match:
         
         # 1. Appliquer les mouvements
         for i, joueur in enumerate(self.joueurs):
-            Fx, Fy, passe = _extraire_action_oop(actions_totales[i])
+            Fx, Fy, _ = _extraire_action_oop(actions_totales[i])
             if joueur.statut == 0: # S'il est libre de bouger
                 joueur.appliquer_mouvement(Fx, Fy, t, self.K)
             else:
@@ -481,7 +389,7 @@ class Match:
                 self.balle.trajectoire_passe(passe_porteur, t, porteur,
                                              self.mb, self.g)
                 self.balle.porteur         = -1
-                self.balle.dernier_passeur = porteur_id
+                # self.balle.dernier_passeur = porteur_id
             else:
                 self.balle.suivre_joueur(porteur, t)
                 
