@@ -13,7 +13,7 @@ start = time.time()
 #  Hyperparamètres                                                     #
 # ------------------------------------------------------------------ #
 epsilon = 0.8
-NB_EPOQUES = 120
+NB_EPOQUES = 1000
 
 positions_initiales = {
     0: (45, 25), 1: (45, 30), # Equipe 1
