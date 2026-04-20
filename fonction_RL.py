@@ -53,24 +53,52 @@ def TD_lambda(net: MLP, traces: dict, S: np.ndarray, S_next: np.ndarray, R: floa
 # ------------------------------------------------------------------ #
 def calculer_recompense(env, final: bool) -> float:
     """Récompense basée sur la progression vers la ligne d'essai."""
-    pos_x = env.balle.x[env.t]
-    cible = env.longeur
-    porteur = env.balle.porteur
-    
-    if final:
-        # Bonus Essai (seulement si porté)
-        if porteur != -1 and env.joueurs[porteur].pos_x[env.t] >= cible:
-            return 20.0 # Augmente le bonus pour qu'il soit très clair
-        return -5.0 # Malus si le match finit sans essai (touche/temps)
-
-    # Récompense de progression
-    recompense = (pos_x / cible) * 0.1
-    
-    # GROS BONUS si le joueur garde la balle en main (incite à ne pas la perdre)
-    if porteur != -1:
-        recompense += 0.05
+    t = env.t
+    x_balle = env.balle.x[t]
+    longeur_terrain = env.longeur
+    porteur_id = env.balle.porteur
+   
+    # essai 
+    if porteur_id != -1:
+        porteur = env.joueurs[porteur_id]
+        # Essai pour l'équipe 1 (Bleu) à droite
+        if porteur.equipe == 1 and porteur.pos_x[t] >= longeur_terrain:
+            print("Essai des Bleus !")
+            return 200.0  
+            
+        # Essai pour l'équipe 2 (Rouge) à gauche
+        elif porteur.equipe == 2 and porteur.pos_x[t] <= 0:
+            print("Essai des Rouges !")
+            return -200.0 
         
-    return recompense
+    # Récompense de progression
+    score_position = (x_balle / longeur_terrain) * 2.0 - 1.0
+    
+    bonus_possession = 0.0
+    bonus_chasse_balle = 0.0
+    
+    if porteur_id != -1:
+        equipe_porteuse = env.joueurs[porteur_id].equipe
+        if equipe_porteuse == 1:
+            bonus_possession = 0.5  # Bonus pour l'Équipe 1
+        elif equipe_porteuse == 2:
+            bonus_possession = -0.5 # Malus pour l'Équipe 1
+            
+        for j in env.joueurs:
+            if j.equipe != equipe_porteuse:
+                dist = np.sqrt((j.pos_x[t] - x_balle)**2 + (j.pos_y[t] - env.balle.y[t])**2)
+                # Plus la distance est grande, plus l'équipe en défense est pénalisée
+                # Multiplicateur faible (0.02) pour ne pas écraser la récompense de l'essai
+                if equipe_porteuse == 1:
+                    # L'équipe 2 défend. Si dist est grand, l'équipe 2 doit être pénalisée (donc R devient plus positif)
+                    bonus_chasse_balle += dist * 0.02 
+                else:
+                    # L'équipe 1 défend. Si dist est grand, l'équipe 1 doit être pénalisée (donc R devient plus négatif)
+                    bonus_chasse_balle -= dist * 0.02
+                    
+    recompense_totale = score_position + bonus_possession + bonus_chasse_balle
+    
+    return recompense_totale
 
 # ------------------------------------------------------------------ #
 #  État (Adapté à l'Orienté Objet)                                     #

@@ -24,21 +24,21 @@ action_avec_balle_1 = []
 action_avec_balle_2 = []
 
 action_joueurs = []
+for i in [-1, 0, 1]:  # Au lieu de range(3)
+    for j in [-1, 0, 1]:
+        Fx = i * 50 
+        Fy = j * 50
+        action_joueurs.append([Fx, Fy, -1])
+        
 action_joueur_balle = []
-for i in range(0,3,1):
-  for j in range(0,3,1):
-      Fx = i * 50 
-      Fy = j * 50
-      action_joueurs.append([Fx,Fy,[0, 0, 0]])
+for i in [-1, 0, 1]:  # Au lieu de range(3)
+  for j in [-1, 0, 1]:
+    Fx = i * 50 
+    Fy = j * 50
+    action_joueur_balle.append([Fx,Fy,-1])
 
-for i in range(0,3,1):
-  for j in range(0,3,1):
-      Fx = i * 50 
-      Fy = j * 50
-      for theta in np.linspace(0,180,3):
-          for phi in np.linspace(0,45,3):
-              for F in np.linspace(0,30,3):
-                  action_joueur_balle.append([Fx,Fy,[F, theta, phi]])
+    for cible_id in range(n):
+        action_joueur_balle.append([Fx, Fy, cible_id])
 
 for a in action_joueurs:
     for b in action_joueurs:
@@ -177,23 +177,6 @@ class Balle:
         self.vy = np.zeros(T_max)
         self.porteur = -1  # -1 = balle au sol/en l'air, sinon ID du joueur
         self.dernier_passeur = -1
-
-    def trajectoire_passe(self, passe, t, joueur_balle, mb, g):
-        """Calcule la trajectoire de la balle lors d'une passe."""
-        F, theta, phi = passe
-        # Conversion des angles en radians si nécessaire
-        theta_rad = np.radians(theta)
-        phi_rad = np.radians(phi)
-        F = float(F)
-        
-        # Position de départ (les mains du joueur)
-        self.x[t] = joueur_balle.pos_x[t]
-        self.y[t] = joueur_balle.pos_y[t]
-        self.z[t] = 1.0 
-        
-        # Vitesse initiale propulsée
-        self.vx[t] = (F/mb * np.cos(theta_rad) * np.cos(phi_rad)) + joueur_balle.vit_x[t]
-        self.vy[t] = (F/mb * np.sin(theta_rad) * np.cos(phi_rad)) + joueur_balle.vit_y[t]
     
     def vol_libre(self, t, g):
         """Fait continuer la trajectoire de la balle quand elle n'a plus de porteur."""
@@ -300,8 +283,11 @@ class Match:
         n = params['n']
         for i in range(n):
             eq = 1 if i < n/2 else 2
-            x_init    = self.longeur * 0.45 if eq == 1 else self.longeur * 0.55
-            y_init   = self.largeur / 2 + (i % 2) * 10 - 5
+            if 'positions_initiales' in params:
+                x_init, y_init = params['positions_initiales'][i]
+            else:
+                x_init    = self.longeur * 0.45 if eq == 1 else self.longeur * 0.55
+                y_init   = self.largeur / 2 + (i % 2) * 10 - 5
             masse = caracteristiques[i]["m"]
             rayon = caracteristiques[i]["r"]
             self.joueurs.append(Joueur(i, eq, masse, rayon, x_init, y_init, self.T_max))
@@ -363,7 +349,7 @@ class Match:
         nb = len(self.joueurs) // 2
         actions_totales = list(actions_eq1)[:nb] + list(actions_eq2)[:nb]
         
-        # 1. Appliquer les mouvements
+        # Appliquer les mouvements
         for i, joueur in enumerate(self.joueurs):
             Fx, Fy, _ = _extraire_action_oop(actions_totales[i])
             if joueur.statut == 0: # S'il est libre de bouger
@@ -376,24 +362,46 @@ class Match:
                 joueur.vit_y[t] = 0.0
                 if joueur.statut > 0:
                     joueur.statut -= 1 # décompte du timer d'immobilisation
-        # 2. Gestion de la balle
+        # Gestion de la balle
         porteur_id = self.balle.porteur
         if porteur_id != -1:
             porteur = self.joueurs[porteur_id]
-            _, _, passe_porteur = _extraire_action_oop(actions_totales[porteur_id])
-            # Si le porteur fait une passe (la 3ème composante de l'action n'est pas nulle)
-            est_passe = (passe_porteur != 0 and
-                         not (isinstance(passe_porteur, list) and
-                              all(v == 0 for v in passe_porteur)))
-            if est_passe:
-                self.balle.trajectoire_passe(passe_porteur, t, porteur,
-                                             self.mb, self.g)
-                self.balle.porteur         = -1
-                # self.balle.dernier_passeur = porteur_id
+            _, _, cible_id = _extraire_action_oop(actions_totales[porteur_id])
+
+            if cible_id != -1 and cible_id != porteur_id and self.joueurs[cible_id].equipe == porteur.equipe:
+                cible = self.joueurs[cible_id]
+                est_en_arriere = False
+                
+                # Vérification de la passe en arrière
+                if porteur.equipe == 1 and cible.pos_x[t-1] < porteur.pos_x[t-1]:
+                    est_en_arriere = True
+                elif porteur.equipe == 2 and cible.pos_x[t-1] > porteur.pos_x[t-1]:
+                    est_en_arriere = True
+                    
+                if est_en_arriere:
+                    # Passe directe instantanée dans les mains !
+                    self.balle.porteur = cible_id
+                    self.balle.dernier_passeur = porteur_id
+                    self.balle.suivre_joueur(cible, t)
+                else:
+                    self.balle.suivre_joueur(porteur, t)
             else:
                 self.balle.suivre_joueur(porteur, t)
                 
-        # 3. Vérification des collisions (Plaquages)
+        # Contrainte stricte : les attaquants restent à 3 mètres max (axe X) du porteur
+        porteur_id_actuel = self.balle.porteur # On actualise au cas où il y a eu une passe
+        if porteur_id_actuel != -1:
+            porteur_actuel = self.joueurs[porteur_id_actuel]
+            for j in self.joueurs:
+                if j.equipe == porteur_actuel.equipe and j.id != porteur_id_actuel:
+                    ecart_x = j.pos_x[t] - porteur_actuel.pos_x[t]
+                    # Si le joueur est à plus de 3m devant ou derrière, on le bloque à 3m
+                    if ecart_x > 3.0:
+                        j.pos_x[t] = porteur_actuel.pos_x[t] + 3.0
+                    elif ecart_x < -3.0:
+                        j.pos_x[t] = porteur_actuel.pos_x[t] - 3.0
+                        
+        # Vérification des collisions (Plaquages)
         for i in range(len(self.joueurs)):
             for j in range(i + 1, len(self.joueurs)):
                 j1, j2 = self.joueurs[i], self.joueurs[j]
