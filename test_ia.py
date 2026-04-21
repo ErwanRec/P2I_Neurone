@@ -1,22 +1,19 @@
-# tester_ia.py
-
 import numpy as np
 import document as dc
 import fonction_RL as RL
 from nn import MLP
-from main import choisir_meilleure_action, charger_reseau, afficher_match, match
 
 # Recréer l'architecture vide
 net1_test = MLP(48, [16, 16, 16, 1])
 net2_test = MLP(48, [16, 16, 16, 1])
 
 # Charger les cerveaux entrainés
-charger_reseau(net1_test, "ia_equipe1_entrainee.json")
-charger_reseau(net2_test, "ia_equipe2_entrainee.json")
+dc.charger_reseau(net1_test, "ia_equipe1_entrainee.json")
+dc.charger_reseau(net2_test, "ia_equipe2_entrainee.json")
 
 positions_initiales = {
-    0: (40, 25), 1: (45, 30), # Equipe 1
-    2: (60, 25), 3: (55, 30)  # Equipe 2
+    0: (40, 25), 1: (40, 30), # Equipe 1
+    2: (60, 25), 3: (60, 30)  # Equipe 2
 }
 
 # Créer une NOUVELLE initialisation de terrain
@@ -52,8 +49,8 @@ while not env_test.etat_final():
         traj_balle["y"].append(env_test.balle.y[t_step])
 
     # Toujours la meilleure action, pas de random()
-    action1 = choisir_meilleure_action(env_test, S, net1_test, equipe=1)
-    action2 = choisir_meilleure_action(env_test, S, net2_test, equipe=2)
+    action1 = dc.choisir_meilleure_action(env_test, S, net1_test, equipe=1)
+    action2 = dc.choisir_meilleure_action(env_test, S, net2_test, equipe=2)
 
     # Création des listes d'actions et step
     a1_liste = [action1] + [zero] * (nb - 1)
@@ -71,4 +68,4 @@ for i in range(nb):
     traj2["x"].append(env_test.joueurs[nb+i].pos_x[:end_t])
     traj2["y"].append(env_test.joueurs[nb+i].pos_y[:end_t])
 
-afficher_match(traj1, traj2, traj_balle)
+dc.afficher_match(traj1, traj2, traj_balle)
