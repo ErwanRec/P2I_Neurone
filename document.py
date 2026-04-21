@@ -586,12 +586,26 @@ class Match:
             Fx, Fy, _ = _extraire_action_oop(actions_totales[i])
             if joueur.statut == 0: # S'il est libre de bouger
                 joueur.appliquer_mouvement(Fx, Fy, t, self.K)
+                if joueur.pos_x[t] < -1:
+                    joueur.pos_x[t] = 0
+                    joueur.vit_x[t] = 0 # Coupe l'élan contre le bord
+                elif joueur.pos_x[t] > self.longeur+1:
+                    joueur.pos_x[t] = self.longeur
+                    joueur.vit_x[t] = 0
+                    
+                # On bloque en Y (largeur)
+                if joueur.pos_y[t] < -1:
+                    joueur.pos_y[t] = 0
+                    joueur.vit_y[t] = 0
+                elif joueur.pos_y[t] > self.largeur+1:
+                    joueur.pos_y[t] = self.largeur
+                    joueur.vit_y[t] = 0
             else:
                 # S'il est au sol ou dans un ruck, il reste sur place
                 joueur.pos_x[t] = joueur.pos_x[t-1]
                 joueur.pos_y[t] = joueur.pos_y[t-1]
-                joueur.vit_x[t] = 0.0
-                joueur.vit_y[t] = 0.0
+                joueur.vit_x[t] = 0
+                joueur.vit_y[t] = 0
                 if joueur.statut > 0:
                     joueur.statut -= 1 # décompte du timer d'immobilisation
         # Gestion de la balle
@@ -667,6 +681,33 @@ class Match:
             # Vérification de la touche
             if porteur.pos_y[self.t] < 0 or porteur.pos_y[self.t] > self.largeur:
                 print("TOUCHE ! (t={self.t})")
-                return True
-                
+                if porteur_id < int(n/2):
+                    self.donner_balle_a(int(n/2))
+                    self.joueurs[int(n/2)].pos_y[self.t] = porteur.pos_y[self.t-1]
+                    self.joueurs[int(n/2)].pos_x[self.t] = porteur.pos_x[self.t-1]
+                    self.joueurs[int(n/2)].vit_x[self.t] = 0
+                    self.joueurs[int(n/2)].vit_y[self.t] = 0
+                    self.joueurs[int(n/2)].acc_x[self.t] = 0
+                    self.joueurs[int(n/2)].acc_y[self.t] = 0
+                    porteur.pos_y[self.t] = porteur.pos_y[self.t-1]
+                    porteur.pos_x[self.t] = porteur.pos_x[self.t-1] -5
+                    porteur.vit_x[self.t] = 0
+                    porteur.vit_y[self.t] = 0
+                    porteur.acc_x[self.t] = 0
+                    porteur.acc_y[self.t] = 0
+                    
+                else :
+                    self.donner_balle_a(int(n/2)-2)
+                    self.joueurs[int(n/2)-2].pos_y[self.t] = porteur.pos_y[self.t-1]
+                    self.joueurs[int(n/2)-2].pos_x[self.t] = porteur.pos_x[self.t-1]
+                    self.joueurs[int(n/2)].vit_x[self.t] = 0
+                    self.joueurs[int(n/2)].vit_y[self.t] = 0
+                    self.joueurs[int(n/2)].acc_x[self.t] = 0
+                    self.joueurs[int(n/2)].acc_y[self.t] = 0
+                    porteur.pos_y[self.t] = porteur.pos_y[self.t-1]
+                    porteur.pos_x[self.t] = porteur.pos_x[self.t-1] +5
+                    porteur.vit_x[self.t] = 0
+                    porteur.vit_y[self.t] = 0
+                    porteur.acc_x[self.t] = 0
+                    porteur.acc_y[self.t] = 0
         return False
