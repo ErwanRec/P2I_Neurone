@@ -1,4 +1,4 @@
-Voilà les 5 fichiers. Voici un résumé de ce qui a changé et pourquoi :
+Voici un résumé de ce qui a changé et pourquoi :
 engine.py — c'est la classe Value de micrograd avec une méthode sigmoid() ajoutée. Elle gère le graphe de calcul automatique, donc tu n'as plus besoin d'écrire back_propagation() à la main.
 nn.py — les classes Neuron, Layer, MLP. La config que tu voulais est intégrée : couches cachées en ReLU, couche de sortie en sigmoïde. Chaque Neuron sait calculer son propre gradient via engine.py.
 fonction_RL.py — les changements clés :

@@ -7,7 +7,11 @@ import json
 from nn import MLP
 
 
-global caracteristique , mb , taille_terrain, g, T , t , n , K , actions_sans_balle , action_avec_balle_1 , action_avec_balle_2 , taille_liste_action
+global caracteristique , mb , taille_terrain, g, T , t , n , K , actions_sans_balle , action_avec_balle_1 , action_avec_balle_2 , taille_liste_action, participants_eq1, participants_eq2, energie_eq1, energie_eq2
+participants_eq1 = []
+participants_eq2 = []
+energie_eq1 = 0
+energie_eq2 = 0
 K = 0.6
 n = 4 # le nombre de joueur total
 T = 60 # temps final
@@ -256,7 +260,6 @@ def match(net1: MLP, net2: MLP, traces1: dict, traces2: dict, PARAMS_MATCH, epsi
     env = Match(PARAMS_MATCH)
     for joueur in env.joueurs:
         joueur.pos_x[0] += np.random.uniform(-5, 5)
-        joueur.pos_y[0] += np.random.uniform(-5, 5)
     
     env.donner_balle_a(0) # Le joueur 0 commence avec la balle
     
@@ -559,15 +562,16 @@ class Match:
         """Gère la logique d'un plaquage."""
         print(f"Plaquage entre Joueur {attaquant.id} et Joueur {defenseur.id} !")
         # Immobilisation des joueurs
-        attaquant.statut = 1
-        defenseur.statut = 1
+        attaquant.statut = 3
+        defenseur.statut = 4
         attaquant.vit_x[self.t] = 0
         attaquant.vit_y[self.t] = 0
-        defenseur.vit_x[self.t] = 0
-        defenseur.vit_y[self.t] = 0
+        defenseur.vit_x[self.t] = 0.01
+        defenseur.vit_y[self.t] = 0.01
         defenseur.fatigue  += 1.0
 
         # Déclenchement d'un ruck
+        self.balle.porteur = -1
         self.timer_ruck = 4 # Durée du ruck
         self.ruck_coor = [attaquant.pos_x[self.t], attaquant.pos_y[self.t]]
 
@@ -581,6 +585,20 @@ class Match:
         nb = len(self.joueurs) // 2
         actions_totales = list(actions_eq1)[:nb] + list(actions_eq2)[:nb]
         
+        if self.timer_ruck > 0:
+            rx, ry = self.ruck_coor
+            for j in self.joueurs:
+                # Si le joueur est à moins de 5m et n'est pas déjà au sol
+                dist_ruck = np.sqrt((j.pos_x[t-1]-rx)**2 + (j.pos_y[t-1]-ry)**2)
+                if dist_ruck < 5.0 and j.statut == 0:
+                    j.statut = 5 # Il entre dans le ruck  
+            self.timer_ruck -= 1
+            # Si le ruck se termine à ce tour-ci
+            if self.timer_ruck == 0:
+                self.resoudre_ruck()
+                for j in self.joueurs:
+                    if j.statut > 0:
+                        j.statut = 0
         # Appliquer les mouvements
         for i, joueur in enumerate(self.joueurs):
             Fx, Fy, _ = _extraire_action_oop(actions_totales[i])
@@ -600,14 +618,40 @@ class Match:
                 elif joueur.pos_y[t] > self.largeur+1:
                     joueur.pos_y[t] = self.largeur
                     joueur.vit_y[t] = 0
+            elif joueur.statut == 5:
+                # Il se déplace vers le ruck (rx, ry)
+                rx, ry = self.ruck_coor
+                dir_x = rx - joueur.pos_x[t-1]
+                dir_y = ry - joueur.pos_y[t-1]
+                dist_ruck = np.sqrt((j.pos_x[t-1]-rx)**2 + (j.pos_y[t-1]-ry)**2)
+                if dist_ruck<1.0:
+                    joueur.statut = 4
+                    joueur.pos_x[t] = joueur.pos_x[t-1]
+                    joueur.pos_y[t] = joueur.pos_y[t-1]
+                    joueur.vit_x[t] = 0
+                    joueur.vit_y[t] =  0
+                else:
+                    joueur.appliquer_mouvement(dir_x*10, dir_y*10, t, self.K)
+            
             else:
                 # S'il est au sol ou dans un ruck, il reste sur place
                 joueur.pos_x[t] = joueur.pos_x[t-1]
                 joueur.pos_y[t] = joueur.pos_y[t-1]
                 joueur.vit_x[t] = 0
                 joueur.vit_y[t] = 0
-                if joueur.statut > 0:
-                    joueur.statut -= 1 # décompte du timer d'immobilisation
+            if joueur.statut == 4:
+                # Somme de m * v^2
+                v2 = j.vit_x[self.t]**2 + j.vit_y[self.t]**2
+                e = j.m * v2
+                if j.equipe == 1:
+                    energie_eq1 += e
+                    participants_eq1.append(j.id)
+                else:
+                    energie_eq2 += e
+                    participants_eq2.append(j.id)
+                j.statut = 3 
+                    
+                
         # Gestion de la balle
         porteur_id = self.balle.porteur
         if porteur_id != -1:
@@ -711,3 +755,13 @@ class Match:
                     porteur.acc_x[self.t] = 0
                     porteur.acc_y[self.t] = 0
         return False
+    def resoudre_ruck(self):
+        # L'équipe avec le plus d'énergie gagne la balle
+        if energie_eq2 > energie_eq1 and len(participants_eq2) > 0:
+            self.donner_balle_a(participants_eq2[0])
+            print("L'équipe 2 récupère le ballon après le ruck !")
+        elif len(participants_eq1) > 0:
+            self.donner_balle_a(participants_eq1[0])
+            print("L'équipe 1 conserve le ballon !")
+            
+        self.ruck_coor = [-1, -1]
