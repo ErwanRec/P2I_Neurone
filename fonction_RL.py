@@ -51,54 +51,76 @@ def TD_lambda(net: MLP, traces: dict, S: np.ndarray, S_next: np.ndarray, R: floa
 # ------------------------------------------------------------------ #
 #  Récompense                                                          #
 # ------------------------------------------------------------------ #
-def calculer_recompense(env, final: bool) -> float:
-    """Récompense basée sur la progression vers la ligne d'essai."""
+def calculer_recompense(env):
+    """
+    Récompense asymétrique : 
+    - L'équipe avec la balle gagne des points de possession et de progression.
+    - L'équipe sans la balle gagne des points de pressing (proximité avec l'adversaire).
+    """
     t = env.t
     x_balle = env.balle.x[t]
     longeur_terrain = env.longeur
     porteur_id = env.balle.porteur
-   
-    # essai 
+    
+    # Initialisation à 0 pour les deux équipes
+    R_equipe1 = 0.0
+    R_equipe2 = 0.0
+    
     if porteur_id != -1:
         porteur = env.joueurs[porteur_id]
-        # Essai pour l'équipe 1 (Bleu) à droite
-        if porteur.equipe == 1 and porteur.pos_x[t] >= longeur_terrain:
-            print("Essai des Bleus !")
-            return 200.0  
-            
-        # Essai pour l'équipe 2 (Rouge) à gauche
-        elif porteur.equipe == 2 and porteur.pos_x[t] <= 0:
-            print("Essai des Rouges !")
-            return -200.0 
+        equipe_porteuse = porteur.equipe
         
-    # Récompense de progression
-    score_position = (x_balle / longeur_terrain) * 2.0 - 1.0
-    
-    bonus_possession = 0.0
-    bonus_chasse_balle = 0.0
-    
-    if porteur_id != -1:
-        equipe_porteuse = env.joueurs[porteur_id].equipe
+        # -------------------------------------------------------------
+        # 1. Calcul des points d'ATTAQUE (Possession)
+        # -------------------------------------------------------------
+        nb_joueurs_equipe = sum(1 for j in env.joueurs if j.equipe == equipe_porteuse)
+        points_possession = (20.0 * nb_joueurs_equipe) + 10.0
+        
+        # -------------------------------------------------------------
+        # 2. Calcul des points de DÉFENSE (Pressing)
+        # -------------------------------------------------------------
+        points_defense = 0.0
+        # On regarde chaque joueur pour trouver les défenseurs
+        for defenseur in env.joueurs:
+            if defenseur.equipe != equipe_porteuse:
+                # Pour chaque défenseur, on regarde sa distance avec les attaquants
+                for attaquant in env.joueurs:
+                    if attaquant.equipe == equipe_porteuse:
+                        # Calcul de la distance exacte entre le défenseur et l'attaquant
+                        dist = ((defenseur.pos_x[t] - attaquant.pos_x[t])**2 + (defenseur.pos_y[t] - attaquant.pos_y[t])**2) ** 0.5
+                        
+                        if dist <= 3.0:
+                            if attaquant.id == porteur_id:
+                                points_defense += 2.0 # Proche du porteur de balle
+                            else:
+                                points_defense += 1.0 # Proche d'un joueur classique
+        
+        # -------------------------------------------------------------
+        # 3. Attribution des points finaux selon qui a la balle
+        # -------------------------------------------------------------
         if equipe_porteuse == 1:
-            bonus_possession = 0.5  # Bonus pour l'Équipe 1
-        elif equipe_porteuse == 2:
-            bonus_possession = -0.5 # Malus pour l'Équipe 1
+            # L'équipe 1 attaque
+            points_distance = (x_balle / longeur_terrain) * 100.0
+            R_equipe1 = points_possession + points_distance
+            R_equipe2 = points_defense # L'équipe 2 récupère les points de pressing
             
-        for j in env.joueurs:
-            if j.equipe != equipe_porteuse:
-                dist = np.sqrt((j.pos_x[t] - x_balle)**2 + (j.pos_y[t] - env.balle.y[t])**2)
-                # Plus la distance est grande, plus l'équipe en défense est pénalisée
-                # Multiplicateur faible (0.02) pour ne pas écraser la récompense de l'essai
-                if equipe_porteuse == 1:
-                    # L'équipe 2 défend. Si dist est grand, l'équipe 2 doit être pénalisée (donc R devient plus positif)
-                    bonus_chasse_balle += dist * 0.02 
-                else:
-                    # L'équipe 1 défend. Si dist est grand, l'équipe 1 doit être pénalisée (donc R devient plus négatif)
-                    bonus_chasse_balle -= dist * 0.02
-                    
-    recompense_totale = score_position + bonus_possession + bonus_chasse_balle
-    
-    return recompense_totale
+            # Vérification de l'essai
+            if porteur.pos_x[t] >= longeur_terrain:
+                print("Essai des Bleus !")
+                R_equipe1 += 50.0  
+                
+        elif equipe_porteuse == 2:
+            # L'équipe 2 attaque
+            points_distance = ((longeur_terrain - x_balle) / longeur_terrain) * 100.0
+            R_equipe2 = points_possession + points_distance
+            R_equipe1 = points_defense # L'équipe 1 récupère les points de pressing
+            
+            # Vérification de l'essai
+            if porteur.pos_x[t] <= 0:
+                print("Essai des Rouges !")
+                R_equipe2 += 50.0  
+
+    return R_equipe1, R_equipe2
 
 # ------------------------------------------------------------------ #
 #  État (Adapté à l'Orienté Objet)                                     #

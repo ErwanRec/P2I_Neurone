@@ -23,7 +23,7 @@ PARAMS_MATCH = {
     'T': dc.T, 'K': dc.K, 'g': dc.g, 'mb': dc.mb, 'n': dc.n,
     'taille_terrain': dc.taille_terrain,
     'caracteristique': dc.caracteristique,
-    'positions_initiales': positions_initiales
+    'positions_initiales': positions_initiales 
 }
 
 
@@ -46,30 +46,39 @@ def sauvegarder_reseau(net, nom_fichier):
 net1 = MLP(48, [16, 16, 16, 1])
 net2 = MLP(48, [16, 16, 16, 1])
 
-historique = []
+historique_1 = []
+historique_2 = []
 
 for epoque in range(NB_EPOQUES):
     traces1 = RL.init_traces(net1)
     traces2 = RL.init_traces(net2)
 
     # On récupère le 4eme argument retourné : la distance finale
-    t1, t2, tb, dist = dc.match(net1, net2, traces1, traces2,PARAMS_MATCH, epsilon)
+    t1, t2, tb, dist_1, dist_2 = dc.match(net1, net2, traces1, traces2,PARAMS_MATCH, epsilon)
 
-    historique.append(dist)
+    historique_1.append(dist_1)
+    historique_2.append(dist_2)
 
     end = time.time()
-    print(f"Époque {epoque:3d} | Distance J0 = {dist:.2f} | {end - start:.1f}s")
+    print(f"Époque {epoque:3d} | Distance J0 = {dist_1:.2f} | {end - start:.1f}s")
     start = end
 
-    if epoque % 5 == 0:
-        print(f"  → Animation époque {epoque}")
-        dc.afficher_match(t1, t2, tb)
+    # if epoque % 5 == 0:
+    #     print(f"  → Animation époque {epoque}")
+    #     dc.afficher_match(t1, t2, tb)
 
     epsilon = max(0.01, epsilon * 0.995)
 sauvegarder_reseau(net1, "ia_equipe1_entrainee.json")
 sauvegarder_reseau(net2, "ia_equipe2_entrainee.json")
 plt.figure()
-plt.plot(historique)
+plt.plot(historique_1)
+plt.title("Progression de l'IA (Version Objet) — Distance finale")
+plt.xlabel("Époque")
+plt.ylabel("Position X")
+plt.grid(True)
+plt.tight_layout()
+plt.figure()
+plt.plot(historique_2)
 plt.title("Progression de l'IA (Version Objet) — Distance finale")
 plt.xlabel("Époque")
 plt.ylabel("Position X")

@@ -7,11 +7,7 @@ import json
 from nn import MLP
 
 
-global caracteristique , mb , taille_terrain, g, T , t , n , K , actions_sans_balle , action_avec_balle_1 , action_avec_balle_2 , taille_liste_action, participants_eq1, participants_eq2, energie_eq1, energie_eq2
-participants_eq1 = []
-participants_eq2 = []
-energie_eq1 = 0
-energie_eq2 = 0
+global caracteristique , mb , taille_terrain, g, T , t , n , K , actions_sans_balle , action_avec_balle_1 , action_avec_balle_2 , taille_liste_action
 K = 0.6
 n = 4 # le nombre de joueur total
 T = 60 # temps final
@@ -311,11 +307,11 @@ def match(net1: MLP, net2: MLP, traces1: dict, traces2: dict, PARAMS_MATCH, epsi
         # --- État suivant et récompense ---
         S_next = RL.recuperer_etat_au_temps_t(env, env.t)
         final  = env.etat_final()
-        R      = RL.calculer_recompense(env, final)
+        R1, R2      = RL.calculer_recompense(env)
 
         # --- Mise à jour TD(λ) ---
-        RL.TD_lambda(net1, traces1, S, S_next,  R)
-        RL.TD_lambda(net2, traces2, S, S_next, -R)
+        RL.TD_lambda(net1, traces1, S, S_next, R1)
+        RL.TD_lambda(net2, traces2, S, S_next, R2)
 
     # --- Extraction pour l'affichage ---
     end_t = env.t + 1
@@ -334,8 +330,9 @@ def match(net1: MLP, net2: MLP, traces1: dict, traces2: dict, PARAMS_MATCH, epsi
     # traj_balle["y"].append(by)
     # traj_balle["porteur"].append(pid)
     
-    dist_finale = traj1["x"][0][-1] # Distance du J0
-    return traj1, traj2, traj_balle, dist_finale
+    dist_finale_1 = traj1["x"][0][-1]
+    dist_finale_2 = traj2["x"][0][-1]
+    return traj1, traj2, traj_balle, dist_finale_1, dist_finale_2
 
 def afficher_match(traj1, traj2, traj_balle):
     print(traj_balle)
@@ -512,6 +509,10 @@ class Match:
         self.ruck_coor = [-1, -1]
         self.timer_ruck = 0
         self.score      = {1: 0, 2: 0}
+        self.participants_eq1 = []
+        self.participants_eq2 = []
+        self.energie_eq1 = 0
+        self.energie_eq2 = 0
         
         # Création des joueurs
         caracteristiques = params['caracteristique']
@@ -641,15 +642,15 @@ class Match:
                 joueur.vit_y[t] = 0
             if joueur.statut == 4:
                 # Somme de m * v^2
-                v2 = j.vit_x[self.t]**2 + j.vit_y[self.t]**2
-                e = j.m * v2
-                if j.equipe == 1:
-                    energie_eq1 += e
-                    participants_eq1.append(j.id)
+                v2 = joueur.vit_x[self.t]**2 + joueur.vit_y[self.t]**2
+                e = joueur.m * v2
+                if joueur.equipe == 1:
+                    self.energie_eq1 += e
+                    self.participants_eq1.append(j.id)
                 else:
-                    energie_eq2 += e
-                    participants_eq2.append(j.id)
-                j.statut = 3 
+                    self.energie_eq2 += e
+                    self.participants_eq2.append(j.id)
+                joueur.statut = 3 
                     
                 
         # Gestion de la balle
@@ -757,11 +758,15 @@ class Match:
         return False
     def resoudre_ruck(self):
         # L'équipe avec le plus d'énergie gagne la balle
-        if energie_eq2 > energie_eq1 and len(participants_eq2) > 0:
-            self.donner_balle_a(participants_eq2[0])
+        if self.energie_eq2 >= self.energie_eq1 and len(self.participants_eq2) > 0:
+            self.donner_balle_a(self.participants_eq2[0])
             print("L'équipe 2 récupère le ballon après le ruck !")
-        elif len(participants_eq1) > 0:
-            self.donner_balle_a(participants_eq1[0])
+        elif len(self.participants_eq1) > 0:
+            self.donner_balle_a(self.participants_eq1[0])
             print("L'équipe 1 conserve le ballon !")
             
         self.ruck_coor = [-1, -1]
+        self.energie_eq1 = 0
+        self.energie_eq2 = 0
+        self.participants_eq1 = []
+        self.participants_eq2 = []
